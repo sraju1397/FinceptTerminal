@@ -176,6 +176,18 @@ QString psm_core_marker_path(const QString& root) {
     return root + QLatin1Char('/') + QLatin1String(kPsmVenvAnalytics) + QStringLiteral("/.core_installed");
 }
 
+/// Argument for `uv pip install -c`. uv 0.7.12 splits `--constraint` on spaces
+/// after argv parsing (pip-compatible `value_delimiter = ' '`), so a lock under
+/// `~/Library/Application Support/...` is opened as `~/Library/Application`
+/// and the install exits 2 before it resolves anything. A file URI has no
+/// spaces, and this uv opens it. `-r` and `-o` do not split, so only `-c`
+/// needs this. https://github.com/astral-sh/uv/issues/12639
+QString psm_uv_constraint_arg(const QString& path) {
+    if (!path.contains(QLatin1Char(' ')))
+        return path;
+    return QUrl::fromLocalFile(QDir::cleanPath(path)).toString(QUrl::FullyEncoded);
+}
+
 QString psm_read_trimmed(const QString& path) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly))
@@ -2151,7 +2163,7 @@ void PythonSetupManager::lane_install_core(int lane) {
                               QStringLiteral("-r"),
                               find_requirements_file(L.core_file),
                               QStringLiteral("-c"),
-                              lock_path(L.venv),
+                              psm_uv_constraint_arg(lock_path(L.venv)),
                               QStringLiteral("-v")};
     start_step(
         uv_path(), args, opts,
